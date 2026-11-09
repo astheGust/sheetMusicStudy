@@ -1,18 +1,51 @@
-export type Status = 'dominada' | 'enferrujada' | 'lendo'
+export type Status = string
+export type StatusColor =
+  | 'mint'
+  | 'amber'
+  | 'blue'
+  | 'rose'
+  | 'violet'
+  | 'cyan'
+  | 'pink'
+  | 'orange'
+  | 'slate'
 
-export const STATUSES: Status[] = ['dominada', 'enferrujada', 'lendo']
+export type StudyStatus = { id: Status; name: string; color: StatusColor }
 
-export const STATUS_LABEL: Record<Status, string> = {
-  dominada: 'Dominada',
-  enferrujada: 'Enferrujada',
-  lendo: 'Lendo',
+export const STATUS_COLORS: Record<StatusColor, string> = {
+  mint: '#34d399',
+  amber: '#fbbf24',
+  blue: '#60a5fa',
+  rose: '#fb7185',
+  violet: '#c084fc',
+  cyan: '#22d3ee',
+  pink: '#f472b6',
+  orange: '#fb923c',
+  slate: '#a1a1aa',
+}
+
+export const DEFAULT_STATUSES: StudyStatus[] = [
+  { id: 'dominada', name: 'Dominado', color: 'mint' },
+  { id: 'enferrujada', name: 'Enferrujada', color: 'amber' },
+  { id: 'lendo', name: 'Lendo', color: 'blue' },
+]
+
+export const STATUS_LABEL: Record<string, string> = Object.fromEntries(
+  DEFAULT_STATUSES.map(({ id, name }) => [id, name]),
+)
+
+export function getStatusName(statuses: StudyStatus[], id: Status): string {
+  return statuses.find((status) => status.id === id)?.name ?? STATUS_LABEL[id] ?? id
+}
+
+export function getStatusColor(statuses: StudyStatus[], id: Status): string {
+  const color = statuses.find((status) => status.id === id)?.color
+  return STATUS_COLORS[color ?? 'slate']
 }
 
 export type FolderId = string
 
 export type Folder = { id: FolderId; name: string }
-
-export const FOLDERS: Folder[] = []
 
 export type Score = {
   id: string
@@ -21,33 +54,39 @@ export type Score = {
   cover: string | null
   embedUrl?: string
   pdfStorageId?: string
-  pdfFileName?: string
-  pdfPageCount?: number
   status: Status
+  notes: StudyNote[]
   /** dias desde a última atividade; null = ainda não estudada */
   lastActivity: number | null
+  lastStudiedAt?: number | null
   source: string
   folders: FolderId[]
   addedAt: number
 }
 
-export type MuseScoreReference = {
+export type StudyNote = {
+  id: string
+  content: string
+  createdAt: number
+  updatedAt?: number
+}
+
+export type ScoreReference = {
   id: string
   title: string
   composer: null
-  cover: null
+  cover: string | null
   source: string
   embedUrl: string
 }
 
-export type UploadedPdfReference = {
-  id: string
-  fileName: string
-  pageCount: number
-  source: string
+export type MuseScoreReference = ScoreReference
+export type MuseScoreImageResult = {
+  score: MuseScoreReference
+  imageUrl: string
 }
 
-export function createMuseScoreReference(input: string): MuseScoreReference | null {
+export function createMuseScoreReference(input: string): ScoreReference | null {
   const value = input.trim()
   if (!value) return null
 
@@ -69,14 +108,48 @@ export function createMuseScoreReference(input: string): MuseScoreReference | nu
     return null
   }
 
-  const match = url.pathname.match(/^\/user\/(\d+)\/scores\/(\d+)(?:\/embed)?\/?$/i)
-  if (!match) return null
+  const segments = url.pathname.split('/').filter(Boolean)
+  if (segments.at(-1)?.toLowerCase() === 'embed') segments.pop()
 
-  const [, userId, scoreId] = match
-  const source = `https://musescore.com/user/${userId}/scores/${scoreId}`
+  let sourcePath: string
+  let id: string
+  let title: string
+  if (
+    segments.length === 4 &&
+    segments[0]?.toLowerCase() === 'user' &&
+    /^\d+$/.test(segments[1] ?? '') &&
+    segments[2]?.toLowerCase() === 'scores' &&
+    /^\d+$/.test(segments[3] ?? '')
+  ) {
+    const userId = segments[1]!
+    const scoreId = segments[3]!
+    sourcePath = `/user/${userId}/scores/${scoreId}`
+    id = `musescore-${scoreId}`
+    title = `Partitura MuseScore ${scoreId}`
+  } else if (segments.length === 2) {
+    let decodedSegments: string[]
+    try {
+      decodedSegments = segments.map((segment) => decodeURIComponent(segment))
+    } catch {
+      return null
+    }
+    if (decodedSegments.some((segment) => !segment || segment.includes('/'))) return null
+
+    sourcePath = `/${decodedSegments.map((segment) => encodeURIComponent(segment.toLowerCase())).join('/')}`
+    id = `musescore-path:${sourcePath.slice(1)}`
+    title = decodedSegments[1]!
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase())
+  } else {
+    return null
+  }
+
+  const source = `https://musescore.com${sourcePath}`
   return {
-    id: `musescore-${scoreId}`,
-    title: `Partitura MuseScore ${scoreId}`,
+    id,
+    title,
     composer: null,
     cover: null,
     source,

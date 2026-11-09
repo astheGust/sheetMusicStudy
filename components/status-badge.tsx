@@ -1,35 +1,38 @@
-import { STATUSES, STATUS_LABEL, type Status } from '@/lib/data'
+import { getStatusColor, getStatusName, type Status, type StudyStatus } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
-export const STATUS_STYLES: Record<Status, { badge: string; dot: string; bar: string }> = {
-  dominada: {
-    badge: 'bg-mastered/12 text-mastered ring-mastered/25',
-    dot: 'bg-mastered',
-    bar: 'bg-mastered',
-  },
-  enferrujada: {
-    badge: 'bg-rusty/12 text-rusty ring-rusty/25',
-    dot: 'bg-rusty',
-    bar: 'bg-rusty',
-  },
-  lendo: {
-    badge: 'bg-reading/12 text-reading ring-reading/25',
-    dot: 'bg-reading',
-    bar: 'bg-reading',
-  },
+export function statusDotStyle(statuses: StudyStatus[], status: Status) {
+  return { backgroundColor: getStatusColor(statuses, status) }
 }
 
-export function StatusBadge({ status, className }: { status: Status; className?: string }) {
+export function statusBadgeStyle(statuses: StudyStatus[], status: Status) {
+  const color = getStatusColor(statuses, status)
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 25%, transparent)`,
+  }
+}
+
+export function StatusBadge({
+  status,
+  statuses,
+  className,
+}: {
+  status: Status
+  statuses: StudyStatus[]
+  className?: string
+}) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
-        STATUS_STYLES[status].badge,
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
         className,
       )}
+      style={statusBadgeStyle(statuses, status)}
     >
-      <span className={cn('size-1.5 rounded-full', STATUS_STYLES[status].dot)} aria-hidden />
-      {STATUS_LABEL[status]}
+      <span className="size-1.5 rounded-full" style={statusDotStyle(statuses, status)} aria-hidden />
+      {getStatusName(statuses, status)}
     </span>
   )
 }
@@ -38,21 +41,23 @@ export function StatusFilter({
   value,
   onChange,
   counts,
+  statuses,
 }: {
   value: Status | null
   onChange: (value: Status | null) => void
   counts: Record<Status, number>
+  statuses: StudyStatus[]
 }) {
-  const total = counts.dominada + counts.enferrujada + counts.lendo
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por status">
       <FilterChip active={value === null} onClick={() => onChange(null)}>
         Todas <span className="text-muted-foreground">{total}</span>
       </FilterChip>
-      {STATUSES.map((s) => (
-        <FilterChip key={s} active={value === s} onClick={() => onChange(value === s ? null : s)}>
-          <span className={cn('size-1.5 rounded-full', STATUS_STYLES[s].dot)} aria-hidden />
-          {STATUS_LABEL[s]} <span className="text-muted-foreground">{counts[s]}</span>
+      {statuses.map(({ id, name }) => (
+        <FilterChip key={id} active={value === id} onClick={() => onChange(value === id ? null : id)}>
+          <span className="size-1.5 rounded-full" style={statusDotStyle(statuses, id)} aria-hidden />
+          {name} <span className="text-muted-foreground">{counts[id] ?? 0}</span>
         </FilterChip>
       ))}
     </div>

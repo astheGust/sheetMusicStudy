@@ -7,8 +7,16 @@ import { OptionsMenu } from './options-menu'
 import { ScoreCover } from './score-cover'
 import { StatusBadge } from './status-badge'
 
-export function ScoreCard({ score }: { score: Score }) {
-  const { navigate, recentlyAddedId } = useStore()
+export function ScoreCard({
+  score,
+  folderId,
+  allowDelete = false,
+}: {
+  score: Score
+  folderId?: string
+  allowDelete?: boolean
+}) {
+  const { navigate, recentlyAddedId, statuses } = useStore()
   const openDetail = () => navigate({ name: 'detail', id: score.id })
 
   return (
@@ -22,6 +30,8 @@ export function ScoreCard({ score }: { score: Score }) {
         <ScoreCover
           src={score.cover}
           title={score.title}
+          status={score.status}
+          statuses={statuses}
           className="transition-transform duration-300 group-hover:scale-[1.01]"
         />
         {recentlyAddedId === score.id && (
@@ -34,7 +44,7 @@ export function ScoreCard({ score }: { score: Score }) {
       <div className="flex flex-1 flex-col gap-3 px-1 pt-3">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-[15px] leading-snug font-medium text-pretty">
+            <h3 className="break-words text-[15px] leading-snug font-medium text-pretty [overflow-wrap:anywhere]">
               <button
                 type="button"
                 onClick={openDetail}
@@ -47,12 +57,17 @@ export function ScoreCard({ score }: { score: Score }) {
               {composerLabel(score.composer)}
             </p>
           </div>
-          <OptionsMenu score={score} className="-mt-1 -mr-1.5" />
+          <OptionsMenu
+            score={score}
+            folderId={folderId}
+            allowDelete={allowDelete}
+            className="-mt-1 -mr-1.5"
+          />
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
-            <StatusBadge status={score.status} className="self-start" />
+            <StatusBadge status={score.status} statuses={statuses} className="self-start" />
             <span className="truncate text-xs text-muted-foreground">
               {formatActivity(score.lastActivity)}
             </span>

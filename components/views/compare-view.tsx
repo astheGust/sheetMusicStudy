@@ -8,7 +8,7 @@ import { ScoreCover } from '../score-cover'
 import { BackButton } from './page-parts'
 
 export function CompareView({ id }: { id: string }) {
-  const { findExternal, library, isInLibrary, addExternal, navigate, back } = useStore()
+  const { findExternal, library, isInLibrary, addExternal, navigate, back, requireAuthentication } = useStore()
   const ext = findExternal(id)
 
   if (!ext) return null
@@ -19,6 +19,7 @@ export function CompareView({ id }: { id: string }) {
   )
 
   const confirm = () => {
+    if (!requireAuthentication()) return
     addExternal(ext)
     navigate({ name: 'all' })
   }
@@ -28,8 +29,10 @@ export function CompareView({ id }: { id: string }) {
       <BackButton />
       <div>
         <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Comparar partitura</p>
-        <h1 className="mt-1 font-serif text-4xl tracking-tight text-balance">Confira antes de adicionar</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        <h1 className="mt-1 break-words font-serif text-3xl tracking-tight text-balance [overflow-wrap:anywhere] sm:text-4xl">
+          Confira antes de adicionar
+        </h1>
+        <p className="mt-2 max-w-xl break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
           Veja título, compositor, capa e origem lado a lado para ter certeza de que é a versão que você procura.
         </p>
       </div>
@@ -73,6 +76,7 @@ function CompareColumn({
   tone: 'new' | 'owned'
   item: ExternalScore | Score
 }) {
+  const { statuses } = useStore()
   return (
     <section
       aria-label={label}
@@ -85,12 +89,20 @@ function CompareColumn({
       <p className={tone === 'new' ? 'text-xs font-medium text-primary' : 'text-xs font-medium text-muted-foreground'}>
         {label}
       </p>
-      <div className="mt-4 flex gap-4">
-        <ScoreCover src={item.cover} title={item.title} sizes="128px" className="size-28 shrink-0 rounded-xl sm:size-32" textClassName="text-2xl" />
+      <div className="mt-4 flex min-w-0 gap-3 sm:gap-4">
+        <ScoreCover
+          src={item.cover}
+          title={item.title}
+          status={'status' in item ? item.status : undefined}
+          statuses={statuses}
+          sizes="128px"
+          className="size-28 shrink-0 rounded-xl sm:size-32"
+          textClassName="text-2xl"
+        />
         <dl className="min-w-0 space-y-3 text-sm">
           <div>
             <dt className="text-xs text-muted-foreground">Título</dt>
-            <dd className="font-medium text-pretty">{item.title}</dd>
+            <dd className="break-words font-medium text-pretty [overflow-wrap:anywhere]">{item.title}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Compositor</dt>
@@ -98,7 +110,7 @@ function CompareColumn({
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Origem</dt>
-            <dd className="text-pretty">{item.source.replace('Descobrir Novas · ', '') || 'Não informado'}</dd>
+            <dd className="break-words text-pretty [overflow-wrap:anywhere]">{item.source.replace('Descobrir Novas · ', '') || 'Não informado'}</dd>
           </div>
         </dl>
       </div>

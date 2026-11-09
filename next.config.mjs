@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
+  devIndicators: false,
   images: {
     unoptimized: true,
   },

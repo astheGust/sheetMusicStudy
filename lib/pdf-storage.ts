@@ -6,10 +6,13 @@ function openPdfDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(STORE_NAME)
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME)
+      }
     }
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('Não foi possível abrir o armazenamento de PDFs.'))
+    request.onerror = () =>
+      reject(request.error ?? new Error('Não foi possível abrir o armazenamento de PDFs.'))
   })
 }
 
@@ -19,8 +22,10 @@ export async function savePdfFile(id: string, file: Blob): Promise<void> {
     const transaction = database.transaction(STORE_NAME, 'readwrite')
     transaction.objectStore(STORE_NAME).put(file, id)
     transaction.oncomplete = () => resolve()
-    transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível salvar o PDF.'))
-    transaction.onabort = () => reject(transaction.error ?? new Error('O salvamento do PDF foi cancelado.'))
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error('Não foi possível salvar o PDF.'))
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('O salvamento do PDF foi cancelado.'))
   }).finally(() => database.close())
 }
 
@@ -30,11 +35,25 @@ export async function getPdfFile(id: string): Promise<Blob | undefined> {
     const transaction = database.transaction(STORE_NAME, 'readonly')
     const request = transaction.objectStore(STORE_NAME).get(id) as IDBRequest<Blob | undefined>
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('Não foi possível abrir o PDF salvo.'))
+    request.onerror = () =>
+      reject(request.error ?? new Error('Não foi possível abrir o PDF salvo.'))
     transaction.oncomplete = () => database.close()
     transaction.onerror = () => {
       database.close()
       reject(transaction.error ?? new Error('Não foi possível abrir o PDF salvo.'))
     }
   })
+}
+
+export async function deletePdfFile(id: string): Promise<void> {
+  const database = await openPdfDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    transaction.objectStore(STORE_NAME).delete(id)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error('Não foi possível excluir o PDF.'))
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('A exclusão do PDF foi cancelada.'))
+  }).finally(() => database.close())
 }

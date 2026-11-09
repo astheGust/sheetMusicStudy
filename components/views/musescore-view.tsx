@@ -1,27 +1,39 @@
 'use client'
 
-import { Check, Play } from 'lucide-react'
+import { Check, FolderPlus, Play } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import type { MuseScoreReference } from '@/lib/data'
+import type { FolderId, MuseScoreReference } from '@/lib/data'
 import { useStore } from '@/lib/store'
 import { Button } from '../ui/button'
 import { BackButton } from './page-parts'
+import { MuseScoreEmbed } from '../musescore-embed'
 
-export function MuseScoreView({ score }: { score: MuseScoreReference }) {
-  const { addMuseScore, findScore, navigate } = useStore()
+export function MuseScoreView({
+  score,
+  onAdded,
+}: {
+  score: MuseScoreReference
+  onAdded: () => void
+}) {
+  const { addScore, findScore, navigate, folders, createFolder, requireAuthentication } = useStore()
   const owned = findScore(score.id)
   const [title, setTitle] = useState(owned?.title ?? '')
+  const [composer, setComposer] = useState(owned?.composer ?? '')
+  const [selectedFolders, setSelectedFolders] = useState<FolderId[]>(owned?.folders ?? [])
+  const [newFolderName, setNewFolderName] = useState('')
   const [titleError, setTitleError] = useState<string | null>(null)
 
   const startStudying = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!requireAuthentication()) return
     const trimmedTitle = title.trim()
     if (!trimmedTitle) {
       setTitleError('Informe o título da música para continuar.')
       return
     }
 
-    addMuseScore(score, trimmedTitle)
+    if (!addScore(score, trimmedTitle, composer, selectedFolders)) return
+    onAdded()
     navigate({ name: 'study', id: score.id })
   }
 
@@ -38,16 +50,11 @@ export function MuseScoreView({ score }: { score: MuseScoreReference }) {
         </p>
       </div>
 
-      <div className="aspect-[4/3] min-h-[420px] overflow-hidden rounded-2xl border bg-card sm:aspect-video sm:min-h-[520px]">
-        <iframe
-          src={score.embedUrl}
-          title="Pré-visualização da partitura do MuseScore"
-          className="size-full"
-          loading="eager"
-          allow="autoplay; fullscreen; clipboard-write"
-          allowFullScreen
-        />
-      </div>
+      <MuseScoreEmbed
+        src={score.embedUrl}
+        sourceUrl={score.source}
+        title="Pré-visualização da partitura do MuseScore"
+      />
 
       <form onSubmit={startStudying} className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:p-5">
         <div className="flex flex-col gap-2">
@@ -81,6 +88,76 @@ export function MuseScoreView({ score }: { score: MuseScoreReference }) {
             </p>
           )}
         </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="musescore-composer" className="text-sm font-medium">
+            Compositor ou artista <span className="text-xs text-muted-foreground">(opcional)</span>
+          </label>
+          <input
+            id="musescore-composer"
+            type="text"
+            value={composer}
+            onChange={(event) => setComposer(event.target.value)}
+            placeholder="Ex.: Claude Debussy"
+            autoComplete="off"
+            maxLength={120}
+            className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/40 focus:ring-3 focus:ring-ring/25"
+          />
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium">Pastas <span className="text-xs text-muted-foreground">(opcional)</span></legend>
+          {folders.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {folders.map((folder) => (
+                <label
+                  key={folder.id}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm hover:bg-secondary"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedFolders.includes(folder.id)}
+                    onChange={(event) =>
+                      setSelectedFolders((current) =>
+                        event.target.checked
+                          ? [...current, folder.id]
+                          : current.filter((id) => id !== folder.id),
+                      )
+                    }
+                    className="accent-primary"
+                  />
+                  {folder.name}
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <label htmlFor="musescore-new-folder" className="sr-only">Nome da nova pasta</label>
+            <input
+              id="musescore-new-folder"
+              type="text"
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              placeholder="Criar nova pasta"
+              maxLength={80}
+              className="h-10 min-w-48 flex-1 rounded-xl border bg-background px-3 text-sm outline-none focus:ring-3 focus:ring-ring/25"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!newFolderName.trim()}
+              onClick={() => {
+                const folderId = createFolder(newFolderName)
+                if (folderId) {
+                  setSelectedFolders((current) => [...current, folderId])
+                  setNewFolderName('')
+                }
+              }}
+            >
+              <FolderPlus /> Criar pasta
+            </Button>
+          </div>
+        </fieldset>
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" size="lg" className="h-11 rounded-full px-5" onClick={() => navigate({ name: 'home' })}>

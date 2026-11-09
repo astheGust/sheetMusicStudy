@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, ChevronRight, FileUp, LoaderCircle, Plus, Search, X } from 'lucide-react'
+import { AlertCircle, Check, ChevronRight, ExternalLink, FileUp, LoaderCircle, Plus, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   EXTERNAL_CATALOG,
@@ -8,24 +8,84 @@ import {
   createMuseScoreReference,
   formatActivity,
   normalize,
+  type MuseScoreImageResult,
 } from '@/lib/data'
 import { useStore } from '@/lib/store'
 import { ScoreCover } from './score-cover'
 import { StatusBadge } from './status-badge'
+import { Button } from './ui/button'
 
-export function SearchBar() {
-  const { library, navigate, isInLibrary, loadState } = useStore()
+export function SearchBar({ clearToken }: { clearToken: number }) {
+  const { library, navigate, isInLibrary, loadState, statuses } = useStore()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [open, setOpen] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
+  const [imageResults, setImageResults] = useState<MuseScoreImageResult[]>([])
+  const [imageSearchLoading, setImageSearchLoading] = useState(false)
+  const [imageSearchError, setImageSearchError] = useState<string | null>(null)
+  const [selectedMuseScoreIds, setSelectedMuseScoreIds] = useState<string[]>([])
   const containerRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (clearToken === 0) return
+    setQuery('')
+    setDebounced('')
+    setUrlError(null)
+    setImageResults([])
+    setSelectedMuseScoreIds([])
+    setOpen(false)
+  }, [clearToken])
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 280)
     return () => clearTimeout(t)
   }, [query])
+
+  useEffect(() => {
+    const searchTerm = debounced.trim()
+    const queryLooksLikeUrl =
+      /^(https?:\/\/|www\.)/i.test(searchTerm) ||
+      searchTerm.includes('/') ||
+      /musescore\.com/i.test(searchTerm)
+    setSelectedMuseScoreIds([])
+
+    if (searchTerm.length < 3 || queryLooksLikeUrl) {
+      setImageResults([])
+      setImageSearchError(null)
+      setImageSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setImageResults([])
+    setImageSearchError(null)
+    setImageSearchLoading(true)
+    void fetch(`/api/musescore-search?q=${encodeURIComponent(searchTerm)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          results?: MuseScoreImageResult[]
+          error?: string
+        }
+        if (!response.ok) throw new Error(payload.error || 'Não foi possível buscar partituras.')
+        if (!Array.isArray(payload.results)) throw new Error('Resposta inválida da busca de partituras.')
+        setImageResults(payload.results)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setImageSearchError(
+          error instanceof Error ? error.message : 'Não foi possível buscar partituras.',
+        )
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setImageSearchLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [debounced])
 
   useEffect(() => {
     const onPointer = (e: PointerEvent) => {
@@ -48,6 +108,10 @@ export function SearchBar() {
 
   const term = normalize(debounced.trim())
   const isLoading = query !== debounced || loadState === 'loading'
+  const searchValue = query.trim()
+  const isUrl = /^(https?:\/\/|www\.)/i.test(searchValue) || searchValue.includes('/') || /musescore\.com/i.test(searchValue)
+  const urlScore = isUrl ? createMuseScoreReference(searchValue) : null
+  const existingUrlScore = urlScore ? library.find((score) => score.id === urlScore.id) : undefined
   const results = useMemo(() => {
     if (!term) return { mine: [], external: [] }
     const words = term.split(/\s+/)
@@ -60,29 +124,35 @@ export function SearchBar() {
   }, [term, library])
 
   const showDropdown = open && query.trim().length > 0
-  const empty = results.mine.length === 0 && results.external.length === 0
+  const empty =
+    results.mine.length === 0 &&
+    results.external.length === 0 &&
+    imageResults.length === 0 &&
+    !imageSearchLoading &&
+    !imageSearchError
 
   const close = () => setOpen(false)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const value = query.trim()
-    const isUrl = /^(https?:\/\/|www\.)/i.test(value) || value.includes('/') || /musescore\.com/i.test(value)
     if (!isUrl) return
 
-    const score = createMuseScoreReference(value)
-    if (!score) {
+    if (!urlScore) {
       setUrlError('Link inválido. Cole a URL de uma partitura do MuseScore.')
       setOpen(true)
       return
     }
 
     setUrlError(null)
-    navigate({ name: 'musescore', score })
+    if (existingUrlScore) {
+      navigate({ name: 'detail', id: existingUrlScore.id })
+    } else {
+      navigate({ name: 'musescore', score: urlScore })
+    }
     close()
   }
 
   return (
-    <form ref={containerRef} onSubmit={submit} className="relative w-full max-w-2xl">
+    <form ref={containerRef} onSubmit={submit} className="relative w-full min-w-0 max-w-2xl">
       <label htmlFor="search" className="sr-only">
         Buscar na biblioteca ou colar uma URL do MuseScore
       </label>
@@ -106,7 +176,7 @@ export function SearchBar() {
           aria-expanded={showDropdown}
           aria-controls="search-results"
           placeholder="Buscar na biblioteca ou colar URL do MuseScore"
-          className="h-12 w-full rounded-full border bg-surface pr-36 pl-11 text-[15px] shadow-inner shadow-black/20 transition-colors outline-none placeholder:text-muted-foreground focus:border-primary/40 focus:ring-3 focus:ring-ring/25 [&::-webkit-search-cancel-button]:hidden"
+          className="h-10 w-full rounded-full border bg-surface pr-20 pl-10 text-sm shadow-inner shadow-black/20 transition-colors outline-none placeholder:text-muted-foreground focus:border-primary/40 focus:ring-3 focus:ring-ring/25 sm:h-12 sm:pr-24 sm:pl-11 sm:text-[15px] [&::-webkit-search-cancel-button]:hidden"
         />
         <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
           <button
@@ -117,7 +187,7 @@ export function SearchBar() {
             }}
             title="Enviar partitura em PDF"
             aria-label="Enviar partitura em PDF"
-            className="flex h-8 items-center justify-center gap-1.5 rounded-full border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="flex h-8 items-center justify-center gap-1.5 rounded-full border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none max-sm:size-9 max-sm:px-0"
           >
             <FileUp className="size-4" />
             <span className="hidden sm:inline">PDF</span>
@@ -154,16 +224,146 @@ export function SearchBar() {
             <p role="alert" className="px-3 py-6 text-sm text-destructive">
               {urlError}
             </p>
+          ) : isUrl && !isLoading ? (
+            <div
+              role="status"
+              className={
+                urlScore
+                  ? existingUrlScore
+                    ? 'mx-2 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rusty/25 bg-rusty/5 px-3 py-3'
+                    : 'mx-2 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-mastered/25 bg-mastered/5 px-3 py-3'
+                  : 'mx-2 mb-2 flex items-center gap-2 rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-3 text-sm text-destructive'
+              }
+            >
+              {urlScore ? (
+                <>
+                  <p className={existingUrlScore ? 'flex items-center gap-2 text-sm text-rusty' : 'flex items-center gap-2 text-sm text-mastered'}>
+                    {existingUrlScore ? <AlertCircle className="size-4 shrink-0" /> : <Check className="size-4 shrink-0" />}
+                    {existingUrlScore
+                      ? `“${existingUrlScore.title}” já está na sua biblioteca.`
+                      : 'Link do MuseScore reconhecido e pronto para adicionar.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (existingUrlScore) {
+                        navigate({ name: 'detail', id: existingUrlScore.id })
+                      } else {
+                        navigate({ name: 'musescore', score: urlScore })
+                      }
+                      close()
+                    }}
+                    className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    {existingUrlScore ? 'Abrir partitura' : 'Continuar'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="size-4 shrink-0" />
+                  <p>Link não reconhecido. Use uma URL de partitura do MuseScore.</p>
+                </>
+              )}
+            </div>
           ) : isLoading ? (
             <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" /> Buscando partituras…
             </div>
-          ) : empty ? (
-            <p className="px-3 py-6 text-sm text-muted-foreground">
-              Nenhuma partitura encontrada para essa busca.
-            </p>
           ) : (
             <>
+              {imageSearchLoading && (
+                <div role="status" className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                  Buscando partituras visuais no MuseScore…
+                </div>
+              )}
+              {imageSearchError && (
+                <p role="alert" className="mx-2 my-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {imageSearchError}
+                </p>
+              )}
+              {imageResults.length > 0 && (
+                <section aria-labelledby="sr-musescore-images">
+                  <h3
+                    id="sr-musescore-images"
+                    className="flex items-center justify-between px-3 pt-2 pb-2 text-[11px] font-medium tracking-wider text-muted-foreground uppercase"
+                  >
+                    Partituras visuais · MuseScore
+                    <span className="tabular-nums">{imageResults.length}</span>
+                  </h3>
+                  <ul className="grid grid-cols-2 gap-2 p-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5">
+                    {imageResults.map((result) => {
+                      const selected = selectedMuseScoreIds.includes(result.score.id)
+                      return (
+                        <li key={result.score.id} className="min-w-0">
+                          <article className={`relative aspect-[4/5] overflow-hidden rounded-xl border bg-secondary ${selected ? 'border-primary ring-2 ring-primary/50' : 'border-border'}`}>
+                            <a
+                              href={result.score.source}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Abrir ${result.score.title} no MuseScore`}
+                              className="absolute inset-0"
+                            >
+                              <img
+                                src={result.imageUrl}
+                                alt={result.score.title}
+                                loading="lazy"
+                                className="size-full object-cover"
+                              />
+                              <span className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/75 text-foreground opacity-70 backdrop-blur transition-opacity hover:opacity-100">
+                                <ExternalLink className="size-3.5" />
+                              </span>
+                            </a>
+                            <button
+                              type="button"
+                              aria-pressed={selected}
+                              aria-label={`${selected ? 'Remover' : 'Selecionar'} ${result.score.title}`}
+                              onClick={() =>
+                                setSelectedMuseScoreIds((current) =>
+                                  selected
+                                    ? current.filter((id) => id !== result.score.id)
+                                    : [...current, result.score.id],
+                                )
+                              }
+                              className={`absolute inset-x-1.5 bottom-1.5 flex h-8 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium backdrop-blur transition-colors ${
+                                selected
+                                  ? 'border-primary/60 bg-primary/80 text-primary-foreground'
+                                  : 'border-white/15 bg-background/65 text-foreground/80 hover:bg-background/90'
+                              }`}
+                            >
+                              {selected && <Check className="size-3.5" />}
+                              {selected ? 'Selecionada' : 'Selecionar'}
+                            </button>
+                          </article>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {selectedMuseScoreIds.length > 0 && (
+                    <div className="flex justify-end px-2 pb-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const selectedScores = imageResults
+                            .filter((result) => selectedMuseScoreIds.includes(result.score.id))
+                            .map(({ score, imageUrl }) => ({ ...score, cover: imageUrl }))
+                          navigate({ name: 'musescore-selection', scores: selectedScores })
+                          close()
+                        }}
+                      >
+                        Detalhes ({selectedMuseScoreIds.length}) <ChevronRight />
+                      </Button>
+                    </div>
+                  )}
+                  <div className="mx-3 my-2 h-px bg-border" />
+                </section>
+              )}
+              {empty && !imageSearchLoading && (
+                <p className="px-3 py-6 text-sm text-muted-foreground">
+                  Nenhuma partitura encontrada para essa busca.
+                </p>
+              )}
               <section aria-labelledby="sr-mine">
                 <h3
                   id="sr-mine"
@@ -191,6 +391,8 @@ export function SearchBar() {
                           <ScoreCover
                             src={s.cover}
                             title={s.title}
+                            status={s.status}
+                            statuses={statuses}
                             className="size-11 shrink-0 rounded-md"
                             sizes="44px"
                             textClassName="text-sm"
@@ -201,7 +403,7 @@ export function SearchBar() {
                               {composerLabel(s.composer)} · {formatActivity(s.lastActivity)}
                             </p>
                           </div>
-                          <StatusBadge status={s.status} />
+                          <StatusBadge status={s.status} statuses={statuses} />
                           <ChevronRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </button>
                       </li>

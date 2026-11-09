@@ -15,11 +15,18 @@ import { ScoreCover } from './score-cover'
 import { StatusBadge } from './status-badge'
 import { Button } from './ui/button'
 
-export function SearchBar({ clearToken }: { clearToken: number }) {
+export function SearchBar({
+  clearToken,
+  open,
+  onOpenChange,
+}: {
+  clearToken: number
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { library, navigate, isInLibrary, loadState, statuses } = useStore()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [open, setOpen] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
   const [imageResults, setImageResults] = useState<MuseScoreImageResult[]>([])
   const [imageSearchLoading, setImageSearchLoading] = useState(false)
@@ -35,8 +42,8 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
     setUrlError(null)
     setImageResults([])
     setSelectedMuseScoreIds([])
-    setOpen(false)
-  }, [clearToken])
+    onOpenChange(false)
+  }, [clearToken, onOpenChange])
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 280)
@@ -89,13 +96,13 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
 
   useEffect(() => {
     const onPointer = (e: PointerEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
+      if (!containerRef.current?.contains(e.target as Node)) onOpenChange(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         inputRef.current?.focus()
-        setOpen(true)
+        onOpenChange(true)
       }
     }
     document.addEventListener('pointerdown', onPointer)
@@ -104,7 +111,7 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
       document.removeEventListener('pointerdown', onPointer)
       document.removeEventListener('keydown', onKey)
     }
-  }, [])
+  }, [onOpenChange])
 
   const term = normalize(debounced.trim())
   const isLoading = query !== debounced || loadState === 'loading'
@@ -131,14 +138,14 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
     !imageSearchLoading &&
     !imageSearchError
 
-  const close = () => setOpen(false)
+  const close = () => onOpenChange(false)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!isUrl) return
 
     if (!urlScore) {
       setUrlError('Link inválido. Cole a URL de uma partitura do MuseScore.')
-      setOpen(true)
+      onOpenChange(true)
       return
     }
 
@@ -167,9 +174,9 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
           onChange={(e) => {
             setQuery(e.target.value)
             setUrlError(null)
-            setOpen(true)
+            onOpenChange(true)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => onOpenChange(true)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') close()
           }}
@@ -218,7 +225,7 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
           role="region"
           aria-label="Resultados da busca"
           aria-live="polite"
-          className="absolute inset-x-0 top-full z-40 mt-2 max-h-[min(70vh,560px)] animate-in overflow-y-auto rounded-2xl border bg-popover p-2 shadow-2xl shadow-black/60 fade-in-0 slide-in-from-top-1"
+          className="absolute inset-x-0 top-full z-40 mt-2 max-h-[min(70vh,560px)] animate-in overflow-y-auto rounded-2xl border bg-popover p-2 shadow-2xl shadow-black/60 fade-in-0 slide-in-from-top-1 max-sm:fixed max-sm:inset-x-2 max-sm:top-[4.25rem] max-sm:z-[70] max-sm:mt-0 max-sm:max-h-[calc(100dvh-5rem)]"
         >
           {urlError ? (
             <p role="alert" className="px-3 py-6 text-sm text-destructive">
@@ -291,12 +298,12 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
                     Partituras visuais · MuseScore
                     <span className="tabular-nums">{imageResults.length}</span>
                   </h3>
-                  <ul className="grid grid-cols-2 gap-2 p-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5">
+                  <ul className="grid grid-cols-2 gap-3 p-2 min-[520px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5">
                     {imageResults.map((result) => {
                       const selected = selectedMuseScoreIds.includes(result.score.id)
                       return (
                         <li key={result.score.id} className="min-w-0">
-                          <article className={`relative aspect-[4/5] overflow-hidden rounded-xl border bg-secondary ${selected ? 'border-primary ring-2 ring-primary/50' : 'border-border'}`}>
+                          <article className={`relative aspect-[3/4] overflow-hidden rounded-xl border bg-secondary ${selected ? 'border-primary ring-2 ring-primary/50' : 'border-border'}`}>
                             <a
                               href={result.score.source}
                               target="_blank"
@@ -310,6 +317,13 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
                                 loading="lazy"
                                 className="size-full object-cover"
                               />
+                              <span
+                                aria-hidden="true"
+                                className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/95 via-black/65 to-transparent"
+                              />
+                              <span className="absolute inset-x-3 bottom-[3.75rem] line-clamp-2 text-left text-xs leading-4 font-semibold text-white drop-shadow-sm">
+                                {result.score.title}
+                              </span>
                               <span className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/75 text-foreground opacity-70 backdrop-blur transition-opacity hover:opacity-100">
                                 <ExternalLink className="size-3.5" />
                               </span>
@@ -325,7 +339,7 @@ export function SearchBar({ clearToken }: { clearToken: number }) {
                                     : [...current, result.score.id],
                                 )
                               }
-                              className={`absolute inset-x-1.5 bottom-1.5 flex h-8 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium backdrop-blur transition-colors ${
+                              className={`absolute inset-x-1.5 bottom-1.5 flex h-11 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium backdrop-blur transition-colors ${
                                 selected
                                   ? 'border-primary/60 bg-primary/80 text-primary-foreground'
                                   : 'border-white/15 bg-background/65 text-foreground/80 hover:bg-background/90'

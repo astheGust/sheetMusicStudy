@@ -61,3 +61,35 @@ Abra [http://localhost:3000](http://localhost:3000) no navegador. O servidor atu
 pnpm typecheck
 pnpm build
 ```
+
+## Aplicativo Android
+
+O aplicativo Android usa Capacitor e carrega `https://sheet-music-study.vercel.app` dentro de uma WebView. A conexão com a internet e a disponibilidade desse endereço são necessárias. Isso mantém funcionando a autenticação e os recursos de servidor, incluindo busca visual e exclusão de conta. Não habilite `output: 'export'` no Next.js: as rotas de API do app exigem o servidor hospedado.
+
+Como o app abre a URL remota, o APK atualiza apenas a casca Android; mudancas em telas e fluxos web precisam ser publicadas em `https://sheet-music-study.vercel.app` para aparecer no app. Mudancas na configuracao nativa ou em plugins exigem sincronizar e recompilar o APK.
+
+Com Android Studio, Android SDK e JDK 21 instalados, adicione a plataforma uma vez:
+
+```bash
+pnpm install
+pnpm android:add
+```
+
+Para atualizar a casca Android após alterações no projeto nativo ou na configuração:
+
+```bash
+pnpm android:sync
+pnpm android:open
+```
+
+No Android Studio, gere o APK em **Build > Build Bundle(s) / APK(s) > Build APK(s)**. O APK não inclui uma cópia offline do site; as atualizações da interface publicadas na URL ficam disponíveis no app sem recompilar a casca.
+
+Se o Android Studio estiver usando um JDK incompatível, selecione o JDK 21 em **Settings > Build, Execution, Deployment > Build Tools > Gradle > Gradle JDK**. No PowerShell, também é possível compilar com:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+.\android\gradlew.bat -p android assembleDebug
+```
+
+O APK de depuração é gerado em `android/app/build/outputs/apk/debug/app-debug.apk`.

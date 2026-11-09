@@ -3,6 +3,8 @@
 import { CircleCheck, LoaderCircle, LogOut, Menu, UserRound, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { App } from '@capacitor/app'
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useStore } from '@/lib/store'
 import { AppSidebar } from './app-sidebar'
@@ -22,6 +24,7 @@ import { MuseScoreSelectionView } from './views/musescore-selection-view'
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [authState, setAuthState] = useState<'loading' | 'ready'>('loading')
   const [authError, setAuthError] = useState<string | null>(null)
@@ -46,9 +49,87 @@ export function AppShell() {
     accountError,
     retryAccountData,
     clearAccountData,
+    back,
+    canGoBack,
   } = useStore()
   const requestLogin = useCallback(() => setAuthViewOpen(true), [])
   const clearSearchAfterScoreAdded = useCallback(() => setSearchClearToken((token) => token + 1), [])
+  const nativeBackState = useRef({
+    mobileOpen,
+    searchOpen,
+    signOutConfirmationOpen,
+    authViewOpen,
+    passwordRecovery,
+    canGoBack,
+    back,
+  })
+  nativeBackState.current = {
+    mobileOpen,
+    searchOpen,
+    signOutConfirmationOpen,
+    authViewOpen,
+    passwordRecovery,
+    canGoBack,
+    back,
+  }
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    let active = true
+    let listener: PluginListenerHandle | null = null
+    void App.addListener('backButton', (event) => {
+      const state = nativeBackState.current
+      if (state.mobileOpen) {
+        setMobileOpen(false)
+      } else if (state.searchOpen) {
+        setSearchOpen(false)
+      } else if (state.signOutConfirmationOpen) {
+        setSignOutConfirmationOpen(false)
+      } else if (state.authViewOpen) {
+        setAuthViewOpen(false)
+      } else if (state.passwordRecovery) {
+        setPasswordRecovery(false)
+      } else if (state.canGoBack) {
+        state.back()
+      } else if (event.canGoBack) {
+        window.history.back()
+      } else {
+        void App.exitApp().catch((error: unknown) => {
+          notify(
+            error instanceof Error
+              ? `Não foi possível fechar o app: ${error.message}`
+              : 'Não foi possível fechar o app.',
+          )
+        })
+      }
+    })
+      .then((handle) => {
+        if (active) {
+          listener = handle
+        } else {
+          void handle.remove().catch((error: unknown) => {
+            console.error('Não foi possível remover o listener do botão Voltar:', error)
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        notify(
+          error instanceof Error
+            ? `Não foi possível ativar o botão Voltar do Android: ${error.message}`
+            : 'Não foi possível ativar o botão Voltar do Android.',
+        )
+      })
+
+    return () => {
+      active = false
+      if (listener) {
+        void listener.remove().catch((error: unknown) => {
+          console.error('Não foi possível remover o listener do botão Voltar:', error)
+        })
+      }
+    }
+  }, [notify])
 
   useEffect(() => {
     configureAuthGuard(session?.user.id ?? null, requestLogin)
@@ -325,7 +406,11 @@ export function AppShell() {
             </button>
             <div className="hidden flex-1 lg:block" />
             <div className="min-w-0 flex-1">
-              <SearchBar clearToken={searchClearToken} />
+              <SearchBar
+                clearToken={searchClearToken}
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
+              />
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
               {session ? (

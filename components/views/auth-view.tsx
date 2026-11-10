@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Eye, EyeOff, KeyRound, Music2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { getSupabaseClient } from '@/lib/supabase'
 import { Button } from '../ui/button'
 
@@ -56,7 +57,11 @@ export function AuthView({
         const { data, error: signUpError } = await getSupabaseClient().auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: Capacitor.isNativePlatform()
+              ? 'com.gustavo.partituras://auth/verified'
+              : `${window.location.origin}/auth/verified`,
+          },
         })
         if (signUpError) throw signUpError
         if (!data.session) {

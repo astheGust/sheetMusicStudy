@@ -18,17 +18,6 @@ type HistoryLayout = 'cards' | 'compact'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function pickSuggestion(library: Score[]): Score | undefined {
-  const rusty = library
-    .filter((score) => score.status === 'enferrujada')
-    .sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0))
-  if (rusty[0]) return rusty[0]
-  const reading = library
-    .filter((score) => score.status === 'lendo')
-    .sort((a, b) => (a.lastActivity ?? 99) - (b.lastActivity ?? 99))
-  return reading[0] ?? library[0]
-}
-
 export function HomeView() {
   const {
     loadState,
@@ -60,36 +49,25 @@ export function HomeView() {
   }
 
   const loading = loadState === 'loading'
-  const suggestion = pickSuggestion(visibleLibrary)
   const activity = buildActivity(visibleLibrary)
   const total = statuses.reduce((sum, status) => sum + (derivedCounts[status.id] ?? 0), 0)
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col items-center gap-3 border-b pb-4 text-center">
         <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Seu espaço de estudo</p>
-          <h1 className="mt-0.5 text-2xl font-medium tracking-tight">Histórico</h1>
+          <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Seu espaço de estudo</p>
+          <h1 className="mt-1 text-3xl font-medium tracking-tight sm:text-4xl">Histórico</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex justify-center">
           <Button
             variant="ghost"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-10 rounded-full px-4 text-sm"
             onClick={() => navigate({ name: 'all' })}
           >
-            <FileText className="size-3.5" />
+            <FileText className="size-4" />
             Biblioteca
           </Button>
-          {suggestion && (
-            <Button
-              variant="outline"
-              className="h-8 shrink-0 rounded-full px-3 text-xs"
-              onClick={() => navigate({ name: 'study', id: suggestion.id })}
-            >
-              <Play className="size-3 fill-current" />
-              {suggestion.lastActivity === null ? 'Iniciar sessão' : 'Continuar estudando'}
-            </Button>
-          )}
         </div>
       </header>
 

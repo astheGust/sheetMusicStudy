@@ -1,10 +1,5 @@
-import { AppShell } from '@/components/app-shell'
-import { StoreProvider } from '@/lib/store'
+import { AppRoot } from '@/components/app-root'
 
 export default function Page() {
-  return (
-    <StoreProvider>
-      <AppShell />
-    </StoreProvider>
-  )
+  return <AppRoot />
 }

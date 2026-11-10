@@ -303,7 +303,7 @@ export function SearchBar({
                       const selected = selectedMuseScoreIds.includes(result.score.id)
                       return (
                         <li key={result.score.id} className="min-w-0">
-                          <article className={`relative aspect-[3/4] overflow-hidden rounded-xl border bg-secondary ${selected ? 'border-primary ring-2 ring-primary/50' : 'border-border'}`}>
+                          <article className={`relative aspect-square overflow-hidden rounded-xl border bg-secondary ${selected ? 'border-primary ring-2 ring-primary/50' : 'border-border'}`}>
                             <a
                               href={result.score.source}
                               target="_blank"
@@ -321,7 +321,7 @@ export function SearchBar({
                                 aria-hidden="true"
                                 className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/95 via-black/65 to-transparent"
                               />
-                              <span className="absolute inset-x-3 bottom-[3.75rem] line-clamp-2 text-left text-xs leading-4 font-semibold text-white drop-shadow-sm">
+                              <span className="absolute inset-x-3 bottom-14 line-clamp-2 text-left text-xs leading-4 font-semibold text-white drop-shadow-sm">
                                 {result.score.title}
                               </span>
                               <span className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/75 text-foreground opacity-70 backdrop-blur transition-opacity hover:opacity-100">
@@ -353,25 +353,25 @@ export function SearchBar({
                       )
                     })}
                   </ul>
-                  {selectedMuseScoreIds.length > 0 && (
-                    <div className="flex justify-end px-2 pb-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          const selectedScores = imageResults
-                            .filter((result) => selectedMuseScoreIds.includes(result.score.id))
-                            .map(({ score, imageUrl }) => ({ ...score, cover: imageUrl }))
-                          navigate({ name: 'musescore-selection', scores: selectedScores })
-                          close()
-                        }}
-                      >
-                        Detalhes ({selectedMuseScoreIds.length}) <ChevronRight />
-                      </Button>
-                    </div>
-                  )}
                   <div className="mx-3 my-2 h-px bg-border" />
                 </section>
+              )}
+              {imageResults.length > 0 && selectedMuseScoreIds.length > 0 && (
+                <div className="sticky bottom-0 z-10 -mx-2 flex justify-end border-y bg-popover/95 px-4 py-2.5 shadow-lg shadow-black/20 backdrop-blur">
+                  <Button
+                    type="button"
+                    className="h-11"
+                    onClick={() => {
+                      const selectedScores = imageResults
+                        .filter((result) => selectedMuseScoreIds.includes(result.score.id))
+                        .map(({ score, imageUrl }) => ({ ...score, cover: imageUrl }))
+                      navigate({ name: 'musescore-selection', scores: selectedScores })
+                      close()
+                    }}
+                  >
+                    Detalhes ({selectedMuseScoreIds.length}) <ChevronRight />
+                  </Button>
+                </div>
               )}
               {empty && !imageSearchLoading && (
                 <p className="px-3 py-6 text-sm text-muted-foreground">

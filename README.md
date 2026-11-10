@@ -8,7 +8,7 @@ O acesso usa Supabase Auth: é possível criar conta, entrar, sair, solicitar re
 
 Para a busca visual de partituras do MuseScore, configure `SERP_API_KEY` no ambiente do servidor (por exemplo, `.env.local`). Essa chave não deve receber o prefixo `NEXT_PUBLIC_`; as consultas passam pela rota server-side `/api/musescore-search`, que limita resultados a 15 e links ao domínio do MuseScore.
 
-O app espera que o schema, as tabelas e as políticas RLS necessárias já estejam configurados no projeto Supabase. Configure as URLs de redirecionamento de autenticação no painel do Supabase para os endereços usados pelo app, incluindo o endereço local de desenvolvimento.
+O app espera que o schema, as tabelas e as políticas RLS necessárias já estejam configurados no projeto Supabase. Configure as URLs de redirecionamento de autenticação no painel do Supabase para os endereços usados pelo app: `http://localhost:3000/auth/verified`, `https://sheet-music-study.vercel.app/auth/verified` e `com.gustavo.partituras://auth/verified`. O link de confirmação do template de e-mail do Supabase deve continuar usando `{{ .ConfirmationURL }}`.
 
 Para habilitar **Excluir conta** no perfil, configure `SUPABASE_SERVICE_ROLE_KEY` como variável somente do servidor no `.env.local` (desenvolvimento) e no ambiente de deploy. Use a chave `service_role`/secret do projeto e nunca a prefixe com `NEXT_PUBLIC_` nem a exponha no navegador. A rota reautentica a pessoa por e-mail e senha antes de excluir a conta e seus dados associados.
 
@@ -67,6 +67,8 @@ pnpm build
 O aplicativo Android usa Capacitor e carrega `https://sheet-music-study.vercel.app` dentro de uma WebView. A conexão com a internet e a disponibilidade desse endereço são necessárias. Isso mantém funcionando a autenticação e os recursos de servidor, incluindo busca visual e exclusão de conta. Não habilite `output: 'export'` no Next.js: as rotas de API do app exigem o servidor hospedado.
 
 Como o app abre a URL remota, o APK atualiza apenas a casca Android; mudancas em telas e fluxos web precisam ser publicadas em `https://sheet-music-study.vercel.app` para aparecer no app. Mudancas na configuracao nativa ou em plugins exigem sincronizar e recompilar o APK.
+
+A confirmação de cadastro retorna ao site na rota `/auth/verified`; no Android, o esquema `com.gustavo.partituras://auth/verified` abre o app por um link profundo. A tela de confirmação encerra a sessão temporária iniciada pelo link e solicita que a pessoa entre normalmente. O esquema Android também precisa estar autorizado na lista de URLs de redirecionamento do Supabase.
 
 Com Android Studio, Android SDK e JDK 21 instalados, adicione a plataforma uma vez:
 

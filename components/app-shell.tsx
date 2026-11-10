@@ -21,13 +21,21 @@ import { ProfileView } from './views/profile-view'
 import { StudyView } from './views/study-view'
 import { StatusSetupView } from './views/status-setup-view'
 import { MuseScoreSelectionView } from './views/musescore-selection-view'
+import { WelcomeTutorial, WELCOME_TUTORIAL_KEY } from './welcome-tutorial'
+
+const EMAIL_VERIFICATION_REDIRECT_PATH = '/auth/verified'
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [authState, setAuthState] = useState<'loading' | 'ready'>('loading')
   const [authError, setAuthError] = useState<string | null>(null)
+  const [emailVerificationStatus, setEmailVerificationStatus] = useState<
+    'processing' | 'success' | 'error' | null
+  >(null)
+  const [emailVerificationError, setEmailVerificationError] = useState<string | null>(null)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [authViewOpen, setAuthViewOpen] = useState(false)
   const [signOutConfirmationOpen, setSignOutConfirmationOpen] = useState(false)
@@ -40,6 +48,10 @@ export function AppShell() {
   const [statusSetupError, setStatusSetupError] = useState<string | null>(null)
   const [searchClearToken, setSearchClearToken] = useState(0)
   const initializedByAuthEvent = useRef(false)
+  const welcomePrompted = useRef(false)
+  const verificationCallback = useRef(false)
+  const verificationCleanupStarted = useRef(false)
+  const lastVerificationUrl = useRef<string | null>(null)
   const {
     notify,
     navigate,
@@ -54,9 +66,43 @@ export function AppShell() {
   } = useStore()
   const requestLogin = useCallback(() => setAuthViewOpen(true), [])
   const clearSearchAfterScoreAdded = useCallback(() => setSearchClearToken((token) => token + 1), [])
+
+  const completeEmailVerification = useCallback(async () => {
+    if (verificationCleanupStarted.current) return
+    verificationCleanupStarted.current = true
+    verificationCallback.current = true
+    welcomePrompted.current = true
+    setEmailVerificationStatus('processing')
+    setEmailVerificationError(null)
+    setSession(null)
+    configureAuthGuard(null, requestLogin)
+
+    try {
+      const { error } = await getSupabaseClient().auth.signOut({ scope: 'local' })
+      if (error) throw error
+      setEmailVerificationStatus('success')
+      verificationCallback.current = false
+      verificationCleanupStarted.current = false
+      if (window.location.pathname === EMAIL_VERIFICATION_REDIRECT_PATH) {
+        window.history.replaceState({}, '', '/')
+      }
+    } catch (error) {
+      setEmailVerificationError(
+        error instanceof Error
+          ? `O e-mail foi verificado, mas não foi possível encerrar a sessão automática: ${error.message}`
+          : 'O e-mail foi verificado, mas não foi possível encerrar a sessão automática.',
+      )
+      setEmailVerificationStatus('error')
+    } finally {
+      verificationCallback.current = false
+      verificationCleanupStarted.current = false
+      setAuthState('ready')
+    }
+  }, [configureAuthGuard, requestLogin])
   const nativeBackState = useRef({
     mobileOpen,
     searchOpen,
+    welcomeOpen,
     signOutConfirmationOpen,
     authViewOpen,
     passwordRecovery,
@@ -66,6 +112,7 @@ export function AppShell() {
   nativeBackState.current = {
     mobileOpen,
     searchOpen,
+    welcomeOpen,
     signOutConfirmationOpen,
     authViewOpen,
     passwordRecovery,
@@ -78,12 +125,163 @@ export function AppShell() {
 
     let active = true
     let listener: PluginListenerHandle | null = null
+    const handleVerificationUrl = async (rawUrl: string) => {
+      if (lastVerificationUrl.current === rawUrl) return
+      let url: URL
+      try {
+        url = new URL(rawUrl)
+      } catch {
+        return
+      }
+      if (
+        url.protocol !== 'com.gustavo.partituras:' ||
+        url.hostname !== 'auth' ||
+        url.pathname !== '/verified'
+      ) {
+        return
+      }
+
+      lastVerificationUrl.current = rawUrl
+      verificationCallback.current = true
+      welcomePrompted.current = true
+      setEmailVerificationStatus('processing')
+      setAuthError(null)
+
+      const hashParams = new URLSearchParams(url.hash.slice(1))
+      const callbackError =
+        url.searchParams.get('error_description') ??
+        url.searchParams.get('error') ??
+        hashParams.get('error_description') ??
+        hashParams.get('error')
+
+      if (callbackError) {
+        setEmailVerificationError(callbackError)
+        setEmailVerificationStatus('error')
+        setAuthState('ready')
+        return
+      }
+
+      try {
+        const code = url.searchParams.get('code')
+        let sessionResult
+        if (code) {
+          sessionResult = await getSupabaseClient().auth.exchangeCodeForSession(code)
+        } else {
+          const tokenHash = url.searchParams.get('token_hash')
+          if (tokenHash) {
+            sessionResult = await getSupabaseClient().auth.verifyOtp({
+              token_hash: tokenHash,
+              type: 'signup',
+            })
+          } else {
+            const accessToken = url.searchParams.get('access_token') ?? hashParams.get('access_token')
+            const refreshToken = url.searchParams.get('refresh_token') ?? hashParams.get('refresh_token')
+            if (!accessToken || !refreshToken) {
+              throw new Error('O link de confirmação não retornou os dados esperados.')
+            }
+            sessionResult = await getSupabaseClient().auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+          }
+        }
+
+        if (sessionResult.error) throw sessionResult.error
+        if (!sessionResult.data.session) {
+          throw new Error('Não foi possível iniciar a sessão temporária de confirmação.')
+        }
+        await completeEmailVerification()
+      } catch (error) {
+        setEmailVerificationError(
+          error instanceof Error ? error.message : 'Não foi possível confirmar o e-mail.',
+        )
+        setEmailVerificationStatus('error')
+        setAuthState('ready')
+      }
+    }
+
+    void App.getLaunchUrl()
+      .then((launch) => {
+        if (active && launch?.url) void handleVerificationUrl(launch.url)
+      })
+      .catch((error: unknown) => {
+        notify(
+          error instanceof Error
+            ? `Não foi possível verificar o link de confirmação: ${error.message}`
+            : 'Não foi possível verificar o link de confirmação.',
+        )
+      })
+
+    void App.addListener('appUrlOpen', ({ url }) => {
+      void handleVerificationUrl(url)
+    })
+      .then((handle) => {
+        if (active) {
+          listener = handle
+        } else {
+          void handle.remove().catch((error: unknown) => {
+            console.error('Não foi possível remover o listener do link de confirmação:', error)
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        notify(
+          error instanceof Error
+            ? `Não foi possível ativar links de confirmação no Android: ${error.message}`
+            : 'Não foi possível ativar links de confirmação no Android.',
+        )
+      })
+
+    return () => {
+      active = false
+      if (listener) {
+        void listener.remove().catch((error: unknown) => {
+          console.error('Não foi possível remover o listener do link de confirmação:', error)
+        })
+      }
+    }
+  }, [completeEmailVerification, notify])
+
+  useEffect(() => {
+    if (window.location.pathname !== EMAIL_VERIFICATION_REDIRECT_PATH) return
+    verificationCallback.current = true
+    welcomePrompted.current = true
+    setEmailVerificationStatus('processing')
+    const params = new URLSearchParams(window.location.search)
+    const callbackError = params.get('error_description') ?? params.get('error')
+    if (callbackError) {
+      setEmailVerificationError(callbackError)
+      setEmailVerificationStatus('error')
+      window.history.replaceState({}, '', '/')
+      setAuthState('ready')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (emailVerificationStatus !== 'processing') return
+    const timer = window.setTimeout(() => {
+      if (!verificationCleanupStarted.current) {
+        setEmailVerificationError('Não foi possível concluir a confirmação. Tente abrir o link novamente.')
+        setEmailVerificationStatus('error')
+        setAuthState('ready')
+      }
+    }, 30_000)
+    return () => window.clearTimeout(timer)
+  }, [emailVerificationStatus])
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    let active = true
+    let listener: PluginListenerHandle | null = null
     void App.addListener('backButton', (event) => {
       const state = nativeBackState.current
       if (state.mobileOpen) {
         setMobileOpen(false)
       } else if (state.searchOpen) {
         setSearchOpen(false)
+      } else if (state.welcomeOpen) {
+        setWelcomeOpen(false)
       } else if (state.signOutConfirmationOpen) {
         setSignOutConfirmationOpen(false)
       } else if (state.authViewOpen) {
@@ -138,6 +336,33 @@ export function AppShell() {
   useEffect(() => {
     if (!session && view.name === 'profile') navigate({ name: 'home' })
   }, [navigate, session, view.name])
+
+  useEffect(() => {
+    if (authState !== 'ready' || welcomePrompted.current) return
+    if (session || view.name !== 'home') {
+      welcomePrompted.current = true
+      return
+    }
+
+    try {
+      if (window.localStorage.getItem(WELCOME_TUTORIAL_KEY) === 'true') {
+        welcomePrompted.current = true
+        return
+      }
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? `Não foi possível verificar a preferência do tutorial: ${error.message}`
+          : 'Não foi possível verificar a preferência do tutorial.',
+      )
+    }
+
+    const timer = window.setTimeout(() => {
+      welcomePrompted.current = true
+      setWelcomeOpen(true)
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [authState, notify, session, view.name])
 
   useEffect(() => {
     let active = true
@@ -201,6 +426,17 @@ export function AppShell() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((event, nextSession) => {
         initializedByAuthEvent.current = true
+        if (verificationCallback.current && nextSession) {
+          setSession(null)
+          setAuthState('ready')
+          setEmailVerificationStatus('processing')
+          if (!verificationCleanupStarted.current) {
+            window.setTimeout(() => {
+              void completeEmailVerification()
+            }, 0)
+          }
+          return
+        }
         configureAuthGuard(nextSession?.user.id ?? null, requestLogin)
         setSession(nextSession)
         setAuthState('ready')
@@ -217,6 +453,11 @@ export function AppShell() {
         if (error) {
           setAuthError(error.message)
           setAuthState('ready')
+          return
+        }
+        if (verificationCallback.current && data.session) {
+          setEmailVerificationStatus('processing')
+          void completeEmailVerification()
           return
         }
         configureAuthGuard(data.session?.user.id ?? null, requestLogin)
@@ -237,7 +478,7 @@ export function AppShell() {
       active = false
       unsubscribe()
     }
-  }, [configureAuthGuard, requestLogin])
+  }, [completeEmailVerification, configureAuthGuard, requestLogin])
 
   const signOut = async () => {
     setSigningOut(true)
@@ -250,6 +491,18 @@ export function AppShell() {
     } finally {
       setSigningOut(false)
     }
+  }
+
+  const continueFromWelcome = () => setWelcomeOpen(false)
+  const openLoginAfterVerification = () => {
+    verificationCallback.current = false
+    verificationCleanupStarted.current = false
+    setEmailVerificationStatus(null)
+    setEmailVerificationError(null)
+    if (window.location.pathname === EMAIL_VERIFICATION_REDIRECT_PATH) {
+      window.history.replaceState({}, '', '/')
+    }
+    setAuthViewOpen(true)
   }
 
   const completeStatusSetup = async () => {
@@ -295,6 +548,46 @@ export function AppShell() {
     } else {
       notify('Conta e dados associados excluídos. Você já pode criar uma conta novamente.')
     }
+  }
+
+  if (emailVerificationStatus === 'processing') {
+    return (
+      <main className="flex min-h-dvh items-center justify-center gap-3 px-5 text-sm text-muted-foreground">
+        <LoaderCircle className="size-5 animate-spin" />
+        Confirmando seu e-mail…
+      </main>
+    )
+  }
+
+  if (emailVerificationStatus === 'success' || emailVerificationStatus === 'error') {
+    const verified = emailVerificationStatus === 'success'
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-8">
+        <section
+          role={verified ? 'status' : 'alert'}
+          className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl shadow-black/20 sm:p-8"
+        >
+          <div className={`mx-auto mb-4 flex size-12 items-center justify-center rounded-full ${verified ? 'bg-mastered/15 text-mastered' : 'bg-destructive/10 text-destructive'}`}>
+            {verified ? <CircleCheck className="size-6" /> : <X className="size-6" />}
+          </div>
+          <h1 className="font-serif text-3xl tracking-tight">
+            {verified ? 'E-mail verificado!' : 'Não foi possível concluir'}
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {verified
+              ? 'Sua conta está pronta. Volte ao Cadenza e entre com seu e-mail e senha.'
+              : emailVerificationError ?? 'O link de confirmação pode ter expirado. Solicite um novo e-mail e tente novamente.'}
+          </p>
+          <button
+            type="button"
+            onClick={openLoginAfterVerification}
+            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85"
+          >
+            Ir para o login
+          </button>
+        </section>
+      </main>
+    )
   }
 
   if (authState === 'loading') {
@@ -395,7 +688,7 @@ export function AppShell() {
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-xl">
-          <div className="flex h-16 items-center gap-2 px-3 sm:h-20 sm:gap-3 sm:px-6 lg:px-10">
+          <div className="relative flex h-16 items-center gap-2 px-3 sm:h-20 sm:gap-3 sm:px-6 lg:px-10">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -405,7 +698,7 @@ export function AppShell() {
               <span className="sr-only">Abrir menu</span>
             </button>
             <div className="hidden flex-1 lg:block" />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 sm:absolute sm:left-1/2 sm:w-[min(42rem,calc(100%-18rem))] sm:-translate-x-1/2">
               <SearchBar
                 clearToken={searchClearToken}
                 open={searchOpen}
@@ -497,6 +790,22 @@ export function AppShell() {
       </div>
 
       <ToastViewport />
+      {welcomeOpen && !session && !authViewOpen && (
+        <WelcomeTutorial
+          onLogin={() => {
+            setWelcomeOpen(false)
+            requestLogin()
+          }}
+          onContinue={continueFromWelcome}
+          onStorageError={(error) =>
+            notify(
+              error instanceof Error
+                ? `Não foi possível salvar essa preferência: ${error.message}`
+                : 'Não foi possível salvar essa preferência.',
+            )
+          }
+        />
+      )}
       {signOutConfirmationOpen && session && (
         <div
           role="dialog"

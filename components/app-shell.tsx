@@ -688,24 +688,25 @@ export function AppShell() {
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-xl">
-          <div className="relative flex h-16 items-center gap-2 px-3 sm:h-20 sm:gap-3 sm:px-6 lg:px-10">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className="flex size-10 shrink-0 items-center justify-center rounded-full border text-muted-foreground hover:text-foreground max-sm:size-11 lg:hidden"
-            >
-              <Menu className="size-4" />
-              <span className="sr-only">Abrir menu</span>
-            </button>
-            <div className="hidden flex-1 lg:block" />
-            <div className="min-w-0 flex-1 sm:absolute sm:left-1/2 sm:w-[min(42rem,calc(100%-18rem))] sm:-translate-x-1/2">
+          <div className="grid h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:h-20 sm:gap-3 sm:px-6 sm:grid-cols-[minmax(7rem,1fr)_minmax(0,min(42rem,calc(100%_-_14rem)))_minmax(7rem,1fr)] lg:px-10">
+            <div className="flex min-w-0 items-center justify-start">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(true)}
+                className="flex size-10 shrink-0 items-center justify-center rounded-full border text-muted-foreground hover:text-foreground max-sm:size-11 lg:hidden"
+              >
+                <Menu className="size-4" />
+                <span className="sr-only">Abrir menu</span>
+              </button>
+            </div>
+            <div className="flex min-w-0 justify-center">
               <SearchBar
                 clearToken={searchClearToken}
                 open={searchOpen}
                 onOpenChange={setSearchOpen}
               />
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+            <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
               {session ? (
                 <>
                   <span className="hidden max-w-40 truncate text-xs text-muted-foreground xl:block">

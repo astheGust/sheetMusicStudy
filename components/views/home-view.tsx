@@ -54,12 +54,12 @@ export function HomeView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-col items-center gap-3 border-b pb-4 text-center">
+      <header className="flex flex-col items-start gap-3 border-b pb-3">
         <div>
           <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Seu espaço de estudo</p>
           <h1 className="mt-1 text-3xl font-medium tracking-tight sm:text-4xl">Histórico</h1>
         </div>
-        <div className="flex justify-center">
+        <div className="flex">
           <Button
             variant="ghost"
             className="h-10 rounded-full px-4 text-sm"

@@ -1,6 +1,6 @@
 'use client'
 
-import { CircleCheck, LoaderCircle, LogOut, Menu, UserRound, X } from 'lucide-react'
+import { CircleCheck, LoaderCircle, Menu, UserRound, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { App } from '@capacitor/app'
@@ -723,16 +723,6 @@ export function AppShell() {
                     <UserRound className="size-3.5" />
                     <span className="max-sm:hidden">Perfil</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSignOutConfirmationOpen(true)}
-                    disabled={signingOut}
-                    className="inline-flex size-8 items-center justify-center rounded-full border text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50 max-sm:size-10"
-                    aria-label="Sair da conta"
-                    title="Sair da conta"
-                  >
-                    {signingOut ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogOut className="size-3.5" />}
-                  </button>
                 </>
               ) : (
                 <button
@@ -780,6 +770,7 @@ export function AppShell() {
               setProfileDisplayName(name)
               setProfileNameError(null)
             }}
+            onSignOutRequest={() => setSignOutConfirmationOpen(true)}
             onAccountDeleted={handleAccountDeleted}
             onScoreAdded={clearSearchAfterScoreAdded}
           />
@@ -872,11 +863,13 @@ export function AppShell() {
 function CurrentView({
   user,
   onDisplayNameChange,
+  onSignOutRequest,
   onAccountDeleted,
   onScoreAdded,
 }: {
   user: Session['user'] | null
   onDisplayNameChange: (displayName: string) => void
+  onSignOutRequest: () => void
   onAccountDeleted: (userId: string) => Promise<void>
   onScoreAdded: () => void
 }) {
@@ -900,6 +893,7 @@ function CurrentView({
         <ProfileView
           user={user}
           onDisplayNameChange={onDisplayNameChange}
+          onSignOutRequest={onSignOutRequest}
           onAccountDeleted={onAccountDeleted}
         />
       )}

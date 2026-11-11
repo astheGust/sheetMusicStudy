@@ -182,7 +182,7 @@ export function SearchBar({
           }}
           aria-expanded={showDropdown}
           aria-controls="search-results"
-          placeholder="Buscar na biblioteca ou colar URL do MuseScore"
+          placeholder="Pesquisar"
           className="h-10 w-full rounded-full border bg-surface pr-20 pl-10 text-sm shadow-inner shadow-black/20 transition-colors outline-none placeholder:text-muted-foreground focus:border-primary/40 focus:ring-3 focus:ring-ring/25 sm:h-12 sm:pr-24 sm:pl-11 sm:text-[15px] [&::-webkit-search-cancel-button]:hidden"
         />
         <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">

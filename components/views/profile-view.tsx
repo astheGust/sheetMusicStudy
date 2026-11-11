@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { AlertTriangle, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, EyeOff, LogOut, Trash2 } from 'lucide-react'
 import { getSupabaseClient } from '@/lib/supabase'
 import { Button } from '../ui/button'
 
 export function ProfileView({
   user,
   onDisplayNameChange,
+  onSignOutRequest,
   onAccountDeleted,
 }: {
   user: User
   onDisplayNameChange: (displayName: string) => void
+  onSignOutRequest: () => void
   onAccountDeleted: (userId: string) => Promise<void>
 }) {
   const [displayName, setDisplayName] = useState('')
@@ -296,6 +298,18 @@ export function ProfileView({
             {changingPassword ? 'Alterando…' : 'Alterar senha'}
           </Button>
         </form>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <h2 className="font-medium">Sessão</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Encerre sua sessão neste dispositivo.
+          </p>
+        </div>
+        <Button type="button" variant="outline" className="self-start rounded-full sm:self-auto" onClick={onSignOutRequest}>
+          <LogOut /> Sair da conta
+        </Button>
       </section>
 
       <section className="rounded-2xl border border-destructive/30 bg-card p-5 sm:p-6">

@@ -1,6 +1,6 @@
 # Cadenza
 
-Dashboard de partituras feito com Next.js, React e TypeScript. A biblioteca começa vazia.
+Dashboard de partituras feito com Next.js, React e TypeScript.
 
 ## Conta e autenticação
 
@@ -93,5 +93,3 @@ $env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.11'
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 .\android\gradlew.bat -p android assembleDebug
 ```
-
-O APK de depuração é gerado em `android/app/build/outputs/apk/debug/app-debug.apk`.
